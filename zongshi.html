@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宗师之上轮换活动计算</title>
+<style>
+  /* ============================================================
+     设计规范（苹果 / 阿里系简约）
+     底色 #f5f5f7 · 纯白卡片 · 单主色蓝 · 1px 细线 · 无渐变无毛玻璃
+     数字统一等宽对齐（tabular-nums）· 语义色只有 绿/琥珀/红 三档
+     ============================================================ */
+  :root{
+    --bg:#f5f5f7;
+    --panel:#ffffff;
+    --ink:#1d1d1f;          /* 主文字 */
+    --ink2:#3a3a3c;         /* 次级文字 */
+    --muted:#86868b;        /* 说明文字 */
+    --line:#e6e6ea;         /* 细线 */
+    --line2:#d2d2d7;        /* 输入框边框 */
+    --blue:#0071e3;         /* 主色 */
+    --blue-d:#0058b0;
+    --blue-soft:#f0f6ff;
+    --blue-line:#cfe3fb;
+    --ok:#0a8f5f; --ok-soft:#e9f8f1; --ok-line:#b7e7d3;
+    --warn:#a35c00; --warn-soft:#fff6e6; --warn-line:#ffdf9e;
+    --bad:#c8372d; --bad-soft:#fdeeed; --bad-line:#f6c8c3;
+    --r:16px; --r2:12px; --r3:10px;
+    --sh:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+    --sh-sm:0 1px 2px rgba(0,0,0,.05);
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro SC","SF Pro Text","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 var(--font); -webkit-font-smoothing:antialiased; overflow-wrap:anywhere;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:20px 16px 64px;}
+
+  /* ---------- 卡片 ---------- */
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh);}
+  .sec{padding:18px 20px; margin-top:14px;}
+  .sec > h2{
+    margin:0 0 14px; font-size:17px; font-weight:600; letter-spacing:-.01em;
+    display:flex; align-items:center; gap:9px; color:var(--ink);
+  }
+  .sec > h2::before{content:""; width:3px; height:15px; border-radius:2px; flex:0 0 3px; background:var(--blue);}
+
+  /* ---------- 折叠栏目 ---------- */
+  details.fold{padding:0; overflow:hidden}
+  details.fold > summary{
+    list-style:none; cursor:pointer; padding:15px 20px; display:flex; align-items:center; gap:9px;
+    font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--ink);
+    min-width:0; overflow:hidden; -webkit-tap-highlight-color:transparent;
+  }
+  details.fold > summary::-webkit-details-marker{display:none}
+  details.fold > summary::before{content:""; width:3px; height:15px; border-radius:2px; flex:0 0 3px; background:var(--blue);}
+  details.fold > summary::after{content:"展开 ▾"; margin-left:auto; font-size:12.5px; font-weight:600; color:var(--blue); flex:0 0 auto;}
+  details.fold[open] > summary::after{content:"收起 ▴"}
+  details.fold[open] > summary{border-bottom:1px solid var(--line); padding-bottom:13px}
+  details.fold > .foldBody{padding:16px 20px 18px}
+  details.fold > summary .sub{
+    margin-left:2px; font-size:12.5px; font-weight:400; color:var(--muted);
+    min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+
+  /* ---------- 顶部 ---------- */
+  header.top{display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:18px 20px;}
+  header.top h1{margin:0; font-size:21px; font-weight:600; letter-spacing:-.02em;}
+  header.top .now{font-size:12.5px; color:var(--muted); margin-top:2px}
+  .logo{
+    width:40px; height:40px; border-radius:13px; flex:0 0 40px; background:var(--blue); color:#fff;
+    display:grid; place-items:center; font-weight:600; font-size:17px; box-shadow:0 4px 12px rgba(0,113,227,.24);
+  }
+
+  /* ---------- 活动切换 ---------- */
+  .actTabs{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px;}
+  .actTabs button{
+    flex:1 1 210px; text-align:left; padding:13px 15px; border-radius:var(--r2); cursor:pointer;
+    border:1px solid var(--line); background:var(--panel); box-shadow:var(--sh-sm);
+    color:var(--ink); font:inherit; transition:border-color .16s, box-shadow .16s, background .16s;
+  }
+  .actTabs button:hover{border-color:var(--line2);}
+  .actTabs button.active{background:var(--blue-soft); border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,113,227,.10);}
+  .actTabs button.active b{color:var(--blue-d)}
+  .actTabs button.active small{color:var(--blue-d)}
+  .actTabs b{font-size:15px; font-weight:600; display:flex; align-items:center; gap:7px; letter-spacing:-.01em}
+  .actTabs small{display:block; font-size:11.5px; color:var(--muted); margin-top:4px}
+  .dot{width:7px; height:7px; border-radius:50%; display:inline-block; flex:0 0 7px}
+
+  /* ---------- 表单 ---------- */
+  .grid{display:grid; gap:12px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(176px,1fr))}
+  .field{display:flex; flex-direction:column; gap:6px; min-width:0}
+  .field label{font-size:12.5px; color:var(--muted)}
+  .iwrap{position:relative; display:flex; align-items:center}
+  .iwrap input{width:100%}
+  .iwrap input{padding-right:26px}
+  .clr{position:absolute; right:5px; top:50%; transform:translateY(-50%); border:0; background:transparent;
+    color:var(--muted); font-size:15px; line-height:1; cursor:pointer; padding:2px 7px; border-radius:5px}
+  .clr:hover{color:var(--ink); background:var(--line)}
+  input,select{
+    font:inherit; height:38px; padding:0 12px; border-radius:var(--r3); border:1px solid var(--line2);
+    background:#fff; color:var(--ink); width:100%; transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus,select:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,113,227,.14)}
+  input[type=number]{text-align:right; font-variant-numeric:tabular-nums}
+  .lk{font-size:12px; color:var(--muted)}
+  .row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+
+  /* 分段开关 */
+  .seg-switch{display:inline-flex; background:#f0f0f2; border-radius:var(--r3); padding:3px; gap:3px}
+  .seg-switch button{
+    border:none; background:transparent; padding:7px 15px; border-radius:8px; font:600 13px/1 var(--font);
+    color:var(--muted); cursor:pointer; transition:.15s;
+  }
+  .seg-switch button.on{background:#fff; color:var(--blue-d); box-shadow:var(--sh-sm)}
+
+  /* 胶囊 */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px;
+    font-size:12px; font-weight:500; background:#f0f0f2; color:var(--ink2); white-space:nowrap;
+  }
+  .pill.ok{background:var(--ok-soft); color:var(--ok)}
+  .pill.warn{background:var(--warn-soft); color:var(--warn)}
+  .pill.bad{background:var(--bad-soft); color:var(--bad)}
+  .pill.ghost{background:#f5f5f7; color:var(--muted)}
+  .pill.blue{background:var(--blue-soft); color:var(--blue-d); font-weight:600}
+
+  /* ---------- KPI ---------- */
+  .kpis{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+  .kpi{padding:14px 16px; border-radius:var(--r2); background:#fafafb; border:1px solid var(--line); min-width:0}
+  .kpi span{font-size:12px; color:var(--muted); display:block}
+  .kpi b{font-size:22px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums}
+  .kpi small{display:block; font-size:11.5px; color:var(--muted); margin-top:2px}
+  .kpi.hi b{color:var(--ok)} .kpi.warn b{color:var(--warn)} .kpi.bad b{color:var(--bad)}
+  .kpi.blue{background:var(--blue-soft); border-color:var(--blue-line)}
+  .kpi.blue b{color:var(--blue-d)}
+
+  /* ---------- 结论行 / 构成链 ---------- */
+  .lead{
+    margin:0 0 14px; padding:13px 16px; border-radius:var(--r2); font-size:14.5px; line-height:1.8;
+    background:var(--blue-soft); border:1px solid var(--blue-line);
+  }
+  .lead b{color:var(--blue-d); font-weight:600; font-variant-numeric:tabular-nums}
+  .chain{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px}
+  .chain .node{background:#fafafb; border:1px solid var(--line); border-radius:var(--r2); padding:9px 13px; min-width:104px}
+  .chain .node em{display:block; font-style:normal; font-size:11.5px; color:var(--muted)}
+  .chain .node b{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums}
+  .chain .node.hi{background:var(--blue-soft); border-color:var(--blue-line)}
+  .chain .node.hi b{color:var(--blue-d)}
+  .chain .arrow{color:var(--line2); font-weight:600; font-size:13px}
+  .miniRow{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px; padding:11px 14px;
+    border-radius:var(--r2); background:#fafafb; border:1px solid var(--line); font-size:12.5px; color:var(--muted);
+  }
+  .miniRow b{font-size:15px; font-weight:600; color:var(--blue-d); font-variant-numeric:tabular-nums}
+  .hi-num{color:var(--warn); font-weight:700}
+
+  /* ---------- 卡片（宝库 / 礼包 / 收入） ---------- */
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r2);
+    padding:13px 14px; transition:border-color .16s, box-shadow .16s; min-width:0;
+  }
+  .card.clickable{cursor:pointer; -webkit-tap-highlight-color:transparent}
+  .card.clickable:hover{border-color:var(--blue-line); box-shadow:0 0 0 3px rgba(0,113,227,.08)}
+  .card.muted{opacity:.6}
+  .card.danger{border-color:var(--bad-line); background:var(--bad-soft)}
+  .card.locked{opacity:.55}
+  .card h4{margin:0 0 6px; font-size:13.5px; font-weight:600; display:flex; align-items:flex-start; gap:8px; justify-content:space-between}
+  .card h4 > span{min-width:0}
+  .card .meta{font-size:12px; color:var(--ink2); line-height:1.65}
+  .gridTres{display:grid;gap:7px;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .gridPack{display:grid;gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))}
+  @media (min-width:941px){ .gridPack{grid-template-columns:repeat(auto-fit,minmax(186px,1fr))} }
+  .card.mini{padding:9px 10px; border-radius:var(--r2)}
+  .card.mini h4{font-size:12.5px; margin:0 0 3px; gap:4px; align-items:center}
+  .card.mini .meta{font-size:11px; line-height:1.5; color:var(--muted)}
+  .qty{display:flex; align-items:center; gap:8px; margin-top:9px}
+  .qty .num{font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; min-width:26px; text-align:center}
+  .qty button{
+    width:30px; height:30px; border-radius:9px; border:1px solid var(--line2); background:#fff; color:var(--blue-d);
+    font:600 16px/1 var(--font); cursor:pointer; display:grid; place-items:center; transition:.15s;
+  }
+  .qty button:hover{background:var(--blue-soft); border-color:var(--blue-line)}
+  .qty button:disabled{opacity:.35; cursor:not-allowed; background:#fafafb}
+  .qty.sm{gap:5px; margin-top:8px}
+  .qty.sm button{width:24px; height:24px; font-size:14px; border-radius:7px}
+  .qty.sm .num{font-size:15px; min-width:18px}
+
+  /* ---------- 两栏 ---------- */
+  .two{display:grid; gap:14px; grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr); align-items:start; margin-top:14px}
+  @media (min-width:941px){ .two:has(#secPacks:not([open])){grid-template-columns:1fr} }
+  @media (max-width:940px){ .two{grid-template-columns:1fr} }
+  .two > section{margin-top:0}
+
+  /* ---------- 充值 / 总额 ---------- */
+  .recLine{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;
+    padding:8px 10px; border:1px solid var(--ok-line); background:var(--ok-soft); border-radius:var(--r2);
+    font-size:12.5px; line-height:1.45}
+  .recLine .lk{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto}
+  .recharge{
+    display:inline-flex; align-items:baseline; gap:8px; padding:11px 18px; border-radius:var(--r2);
+    background:var(--blue-soft); border:1px solid var(--blue-line);
+  }
+  .recharge b{font-size:24px; font-weight:600; letter-spacing:-.02em; color:var(--blue-d); font-variant-numeric:tabular-nums}
+
+  /* ---------- 轮次节点 ---------- */
+  .roundBlock{margin-top:16px}
+  .roundBlock:first-child{margin-top:0}
+  .roundBlock h5{margin:0 0 9px; font-size:13.5px; font-weight:600; color:var(--ink); display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0}
+  .chips{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(146px,1fr))}
+  .chip{background:#fafafb; border:1px solid var(--line); border-radius:var(--r2); padding:9px 11px; cursor:pointer; transition:.15s}
+  .chip:hover{border-color:var(--line2)}
+  .chip .c1{font-size:15px; font-weight:600; font-variant-numeric:tabular-nums}
+  .chip .c2{font-size:11.5px; color:var(--muted); line-height:1.6}
+  .chip.ok{border-color:var(--ok-line); background:var(--ok-soft)}
+  .chip.bad{border-color:var(--bad-line); background:var(--bad-soft)}
+  .chip.pick{border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,113,227,.12); background:var(--blue-soft)}
+
+  /* ---------- 按钮 ---------- */
+  .btn{
+    border:1px solid var(--line2); background:#fff; color:var(--ink); border-radius:var(--r3);
+    padding:8px 15px; font:600 13px var(--font); cursor:pointer; transition:.15s;
+  }
+  .btn:hover{border-color:var(--blue); color:var(--blue-d); background:var(--blue-soft)}
+  .btn:disabled{opacity:.45; cursor:not-allowed; border-color:var(--line); color:var(--muted); background:#fafafb}
+  .btn.primary{background:var(--blue); color:#fff; border-color:var(--blue)}
+  .btn.primary:hover{background:var(--blue-d); border-color:var(--blue-d); color:#fff}
+
+  /* ---------- 提示 / 说明 ---------- */
+  .note{font-size:12px; color:var(--muted); margin-top:10px}
+  .toast{
+    position:fixed; left:50%; bottom:28px; z-index:50; pointer-events:none;
+    transform:translateX(-50%) translateY(16px); opacity:0; transition:.24s;
+    background:rgba(29,29,31,.94); color:#fff; padding:11px 20px; border-radius:var(--r2); font-size:13px;
+    max-width:calc(100vw - 32px); text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .toast.warn{background:rgba(200,55,45,.96)}
+  .mono{font-variant-numeric:tabular-nums}
+
+  /* ---------- 手机端顶部摘要条 ---------- */
+  .stickyBar{display:none}
+
+  @media (max-width:940px){
+    body{font-size:14.5px}
+    .wrap{padding:12px 12px 84px}
+    .sec{padding:15px 15px; margin-top:12px}
+    .sec > h2{font-size:16px; margin-bottom:12px}
+    details.fold > summary{padding:14px 15px; font-size:16px}
+    details.fold > .foldBody{padding:14px 15px}
+    header.top{padding:15px}
+    header.top h1{font-size:19px}
+    .logo{width:36px; height:36px; flex-basis:36px; border-radius:12px; font-size:16px}
+    .lead{font-size:14px; padding:12px 14px}
+    .kpi{padding:12px 13px} .kpi b{font-size:19px}
+    .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px}
+    .chips{grid-template-columns:repeat(auto-fit,minmax(116px,1fr))}
+    .card{padding:11px 12px}
+    .chain .node{padding:8px 11px; min-width:92px}
+    .chain .node b{font-size:15px}
+    .recharge b{font-size:22px}
+    .gridTres{gap:6px}
+    .card.mini{padding:7px 8px}
+    .card.mini h4{font-size:11.5px}
+    .card.mini .meta{font-size:10.5px}
+    .qty.sm button{width:22px; height:22px; font-size:13px}
+    .qty.sm .num{font-size:14px; min-width:16px}
+    .stickyBar{
+      display:flex; position:sticky; top:0; z-index:25; margin-top:12px; padding:10px 12px; gap:8px;
+      align-items:center; flex-wrap:wrap; font-size:12.5px; color:var(--muted); border-radius:var(--r2);
+      background:rgba(255,255,255,.94); border:1px solid var(--line); box-shadow:var(--sh-sm);
+      -webkit-backdrop-filter:saturate(1.6) blur(12px); backdrop-filter:saturate(1.6) blur(12px);
+    }
+    .stickyBar b{color:var(--ink); font-size:14px; font-weight:600; font-variant-numeric:tabular-nums}
+    .stickyBar .btn{padding:6px 11px; font-size:12.5px}
+  }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="wrap">
+
+<header class="top panel">
+  <div class="logo">囤</div>
+  <div style="min-width:0">
+    <h1>宗师之上轮换活动计算</h1>
+    <div class="now" id="heroNote"></div>
+  </div>
+</header>
+
+<div class="actTabs" id="actTabs"></div>
+<div class="stickyBar" id="stickyBar"></div>
+
+<details class="panel sec fold" id="secCal">
+  <summary>开服日期设置<span class="sub" id="cycleSub"></span></summary>
+  <div class="foldBody">
+    <div class="grid g4">
+      <div class="field"><label>推算方式</label>
+        <select id="cycleMode">
+          <option value="auto">开服日推算</option>
+          <option value="manual">手动锚定</option>
+        </select></div>
+      <div class="field" id="wrapServer"><label>开服日期</label><input type="date" id="serverStart"></div>
+      <div class="field" id="wrapAnchorAct"><label>进行中的活动</label><select id="anchorAct"></select></div>
+      <div class="field" id="wrapAnchorDate"><label>该活动开始日期</label><input type="date" id="anchorDate"></div>
+    </div>
+  </div>
+</details>
+
+<section class="panel sec" id="secRes">
+  <h2>我的资源</h2>
+  <div class="grid g4">
+    <div class="field"><label id="labStock">库存消耗品</label><div class="iwrap"><input type="number" id="stock" min="0" step="1"><button class="clr" data-clear="stock" title="清空">×</button></div></div>
+    <div class="field"><label id="labExchStock">库存兑换货币</label><div class="iwrap"><input type="number" id="exchStock" min="0" step="1"><button class="clr" data-clear="exchStock" title="清空">×</button></div></div>
+    <div class="field"><label>已抽次数</label><div class="iwrap"><input type="number" id="startCount" min="0" step="1" placeholder="留空＝从 0 开始"><button class="clr" data-clear="startCount" title="清空">×</button></div></div>
+    <div class="field" style="grid-column:span 2">
+      <label>目标</label>
+      <div class="row">
+        <div class="seg-switch" id="targetSwitch">
+          <button data-m="">不设目标</button>
+          <button data-m="round">按轮次</button>
+          <button data-m="count">按次数</button>
+        </div>
+        <select id="targetRound" style="max-width:220px"></select>
+        <input type="number" id="targetCount" min="1" step="1" placeholder="输入目标次数" style="max-width:150px">
+      </div>
+    </div>
+  </div>
+  <div id="resRec" style="margin-top:14px"></div>
+  <div id="incomeBox" style="margin-top:14px"></div>
+</section>
+
+<div class="two">
+  <section class="panel sec">
+    <h2>综合分析</h2>
+    <div id="analysis"></div>
+    <div id="rechargeMini"></div>
+  </section>
+
+  <details class="panel sec fold" id="secPacks" open>
+    <summary>礼包<span class="sub" id="packSub"></span></summary>
+    <div class="foldBody">
+      <div id="packHead"></div>
+      <div class="gridPack" id="packList" style="margin-top:12px"></div>
+    </div>
+  </details>
+</div>
+
+<details class="panel sec fold" id="secRound">
+  <summary>反推进度 / 挑战轮次参考表<span class="sub" id="roundSub"></span></summary>
+  <div class="foldBody">
+    <div class="grid g2" style="margin-bottom:14px">
+      <div class="field"><label id="labReverse">目标兑换货币（如 2200）</label>
+        <div class="iwrap"><input type="number" id="reverseExch" min="0" step="1" placeholder="例如 1200"><button class="clr" data-clear="reverseExch" title="清空">×</button></div></div>
+      <div id="reverseTop" class="row" style="align-items:center"></div>
+    </div>
+    <div id="roundTable"></div>
+  </div>
+</details>
+
+<details class="panel sec fold" id="secTreasure" open>
+  <summary>宝库兑换规划<span class="sub" id="tresSub"></span></summary>
+  <div class="foldBody">
+    <div id="treasureHead"></div>
+    <div id="treasureTable"></div>
+  </div>
+</details>
+
+<section class="panel sec" id="secRecharge">
+  <h2>充值汇总</h2>
+  <div id="rechargeBox"></div>
+  <div class="note" style="margin-top:12px; line-height:1.9">理性充值，适度娱乐。游戏道具有贬值性，合理评估经济状况再充值。<br>本计算器不保证百分百准确，逐步购买避免浪费。</div>
+</section>
+
+<div class="row" style="margin-top:16px; padding:0 2px">
+  <button class="btn primary" id="btnReset">重置全部输入</button>
+  <span class="note" style="margin:0">输入自动保存在本机浏览器，下次打开继续用</span>
+</div>
+
+</div>
+
+<script>
+/* ============================================================
+   维护模式遮罩：需要维护时把下面的 false 改成 true（整站盖全屏维护页）；
+   恢复正常时改回 false。
+   ============================================================ */
+(function () {
+  var IS_MAINTENANCE = false;          // true = 维护中；false = 正常使用
+  var MAINTENANCE_MSG = "工具正在更新活动数值与优化计算逻辑，稍后恢复，请耐心等待...";
+  if (!IS_MAINTENANCE) return;
+  function show() {
+    if (document.getElementById('maintMask')) return;
+    var mask = document.createElement('div');
+    mask.id = 'maintMask';
+    mask.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,17,23,.96);' +
+      'z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+      'color:#e8eaed;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:20px;';
+    mask.innerHTML =
+      '<div style="font-size:48px;margin-bottom:16px">&#128736;&#65039;</div>' +
+      '<h2 style="font-size:22px;margin:0 0 12px;color:#4e9af1">工具正在更新中</h2>' +
+      '<p style="font-size:14px;color:#8b8f9a;max-width:400px;line-height:1.6;margin:0">' + MAINTENANCE_MSG + '</p>' +
+      '<div style="margin-top:24px;font-size:12px;color:#5a5e6e">收藏本页，恢复后即可使用</div>';
+    document.body.appendChild(mask);
+    document.body.style.overflow = 'hidden';
+  }
+  if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', show);
+  else show();
+})();
+</script>
+
+
+<script id="core">
+/* =========================================================================
+   数据：鉴石大会 = 游戏内实测（以此为准）；山海灵宝 / 破木悟法 = 沿用参照工具数据，待游戏内开放后更新
+   口径：消耗品抽奖 → 每档返还消耗品 + 给兑换货币 → 宝库兑换 → 按层返还消耗品 → 再抽奖（迭代收敛）
+   ========================================================================= */
+const LAYER_NEED = [0, 100, 300, 600, 1000];    // 各层解锁：需已累计消耗的兑换货币
+const LAYER_RET  = [1, 2, 3, 4, 5];             // 各层兑换返还的消耗品
+
+const PAID = [                                   // 付费礼包：价格 / 消耗品 / 兑换货币 / 限购
+  [6, 5, 10, 3], [30, 10, 30, 2], [68, 20, 50, 2], [128, 25, 100, 5],
+  [198, 30, 120, 5], [328, 40, 160, 10], [648, 50, 300, 12]
+];
+const PAID_POMU = [                              // 破木悟法：同价，消耗品给双倍（每次挑战消耗 5）
+  [6, 10, 10, 3], [30, 20, 30, 2], [68, 40, 50, 2], [128, 50, 100, 5],
+  [198, 60, 120, 5], [328, 80, 160, 10], [648, 100, 300, 12]
+];
+const PAID_NAME = ['特惠', '超值', '精选', '助力', '豪华', '史诗', '尊享'];
+/* 每日福利类：perDay = 每天可买次数，实际可得 = min(限购, 剩余天数 × perDay) */
+function packSet(prefix, paid, dailyType) {
+  paid = paid || PAID;
+  return [
+    { name: '每日福利', price: 0, cons: 1, exch: 2, limit: 7, perDay: 1, type: '免费' },
+    { name: '每日绑定', price: 0, cons: 3, exch: 2, limit: 14, perDay: 2, type: dailyType || '绑购' }
+  ].concat(paid.map((p, i) => ({ name: prefix + PAID_NAME[i], price: p[0], cons: p[1],
+                                 exch: p[2], limit: p[3], perDay: 0, type: '礼包' })));
+}
+
+/* rounds: counts = 六档累计次数（全局计数）, souls = 每档给货币, extraSoul = 整轮额外货币 */
+const ACTS = {
+  shanhai: {
+    key: 'shanhai', name: '山海灵宝', consumable: '灵宝券', exchange: '山海币',
+    costPerChallenge: 1, tierReturn: 2, slot: 0, assoc: 5, assocName: '协会商店',
+    dataNote: '数值沿用参照工具，待游戏内实测更新',
+    packs: packSet('灵宝'),
+    rounds: [
+      { name: '第一轮', counts: [4, 8, 20, 32, 45, 60], souls: [40, 40, 40, 40, 40, 40], extraSoul: 80 },
+      { name: '第二轮', counts: [72, 84, 96, 108, 120, 135], souls: [50, 50, 50, 50, 50, 50], extraSoul: 100 },
+      { name: '第三轮', counts: [150, 165, 180, 200, 220, 250], souls: [60, 60, 60, 60, 60, 60], extraSoul: 120 },
+      { name: '第四轮', counts: [280, 310, 340, 370, 400, 440], souls: [70, 70, 70, 70, 70, 70], extraSoul: 120 },
+      { name: '第五轮', counts: [480, 520, 560, 600, 640, 690], souls: [80, 80, 80, 80, 80, 80], extraSoul: 160 },
+      { name: '第六轮', counts: [740, 790, 840, 890, 940, 1000], souls: [90, 90, 90, 90, 90, 90], extraSoul: 180 },
+      { name: '第七轮', counts: [1060, 1120, 1180, 1240, 1300, 1370], souls: [100, 100, 100, 100, 100, 100], extraSoul: 200 }
+    ],
+    treasure: [
+      [['升星石×200', 50, 8], ['山海蓝宝碎片箱×100', 50, 8], ['强化粉尘·蓝×1000', 50, 8]],
+      [['人界宝物碎片箱·紫×60', 60, 5], ['山海紫宝碎片箱×60', 60, 5], ['强化粉尘·紫×200', 50, 5]],
+      [['人界宝物碎片箱·橙×40', 100, 6], ['山海橙宝碎片箱×40', 100, 12], ['仙界山海红宝碎片箱×30', 100, 12]],
+      [['仙界山海红宝碎片箱×60', 200, 10], ['圣宝灵髓×5', 200, 2], ['红色法则碎片×40', 200, 12]],
+      [['天绝神通自选×1', 1200, 2], ['圣宝灵髓×10', 500, 4], ['大道法则碎片×40', 200, 12]]
+    ]
+  },
+  pomu: {
+    key: 'pomu', name: '破木悟法', consumable: '行功散', exchange: '悟法残页',
+    costPerChallenge: 5, tierReturn: 2, slot: 7, assoc: 6, assocName: '协会商店',
+    dataNote: '数值沿用参照工具，待游戏内实测更新',
+    packs: packSet('悟法', PAID_POMU, '免费'),
+    rounds: [
+      { name: '第一轮', counts: [1, 3, 6, 9, 12, 15], souls: [40, 40, 40, 40, 40, 40], extraSoul: 80 },
+      { name: '第二轮', counts: [17, 20, 23, 27, 31, 35], souls: [50, 50, 50, 50, 50, 50], extraSoul: 100 },
+      { name: '第三轮', counts: [40, 45, 50, 55, 60, 65], souls: [60, 60, 60, 60, 60, 60], extraSoul: 100 },
+      { name: '第四轮', counts: [72, 80, 88, 96, 105, 115], souls: [70, 70, 70, 70, 70, 70], extraSoul: 140 },
+      { name: '第五轮', counts: [125, 135, 150, 165, 180, 200], souls: [80, 80, 80, 80, 80, 80], extraSoul: 160 },
+      { name: '第六轮', counts: [220, 240, 260, 280, 300, 320], souls: [90, 90, 90, 90, 90, 90], extraSoul: 180 },
+      { name: '第七轮', counts: [350, 380, 410, 440, 470, 500], souls: [100, 100, 100, 100, 100, 100], extraSoul: 200 }
+    ],
+    treasure: [
+      [['紫色法则碎片×10', 50, 8], ['领悟点×1000', 50, 8], ['强化粉尘·蓝×1000', 50, 8]],
+      [['橙色法则碎片×20', 100, 6], ['飞剑残魄×200', 100, 6], ['仙界心法碎片×40', 100, 6]],
+      [['神兵陨铁×2', 150, 6], ['悟法被动心法碎片箱×40', 100, 30], ['神铸石×20', 100, 6]],
+      [['悟法主动心法碎片箱×40', 100, 7], ['圣宝灵髓×5', 200, 2], ['红色法则碎片×40', 200, 12]],
+      [['天绝神通自选×1', 1200, 2], ['圣宝灵髓×10', 500, 4], ['大道法则碎片×40', 200, 12]]
+    ]
+  },
+  jsh: {
+    key: 'jsh', name: '鉴石大会', consumable: '解玉仙刃', exchange: '精魄',
+    costPerChallenge: 1, tierReturn: 1, slot: 14, assoc: 5, assocName: '宗门商店',
+    dataNote: '数据为游戏内实测，以此为准',
+    packs: packSet('鉴石'),
+    rounds: [
+      { name: '第一轮', counts: [4, 8, 20, 32, 45, 60], souls: [40, 40, 40, 40, 40, 40], extraSoul: 80 },
+      { name: '第二轮', counts: [72, 84, 96, 108, 120, 135], souls: [50, 50, 50, 50, 50, 50], extraSoul: 100 },
+      { name: '第三轮', counts: [150, 165, 180, 200, 220, 250], souls: [60, 60, 60, 60, 60, 60], extraSoul: 120 },
+      { name: '第四轮', counts: [280, 310, 340, 370, 400, 440], souls: [70, 70, 70, 70, 70, 70], extraSoul: 140 },
+      { name: '第五轮', counts: [480, 520, 560, 600, 640, 690], souls: [80, 80, 80, 80, 80, 80], extraSoul: 160 },
+      { name: '第六轮', counts: [740, 790, 840, 890, 940, 1000], souls: [90, 90, 90, 90, 90, 90], extraSoul: 180 },
+      { name: '第七轮', counts: [1060, 1120, 1180, 1240, 1300, 1370], souls: [100, 100, 100, 100, 100, 100], extraSoul: 200 }
+    ],
+    treasure: [
+      [['升星石×200', 50, 3], ['神兵碎晶×10000', 50, 3], ['宠物蛋×5', 50, 8]],
+      [['橙神兵碎片×20', 100, 4], ['神兵陨铁×1', 75, 4], ['虹光仙果×10', 200, 6]],
+      [['金仙宝物碎片×40', 100, 2], ['神兵陨铁×2', 150, 2], ['圣品神兵碎片×2', 150, 30]],
+      [['金仙法则碎片×40', 200, 12], ['九霞云轿碎片×2', 150, 20], ['圣宝灵髓×5', 200, 2]],
+      [['金仙大道法则碎片×40', 200, 12], ['净世神通自选×1', 1200, 2], ['圣宝灵髓×10', 500, 4]]
+    ]
+  }
+};
+const ORDER = ['shanhai', 'pomu', 'jsh'];        // 每活动 7 天，21 天一轮
+
+/* ============================ 计算核心（按活动） ============================ */
+function makeEngine(key) {
+  const A = ACTS[key];
+  const CP = A.costPerChallenge, TR = A.tierReturn;
+  const R = A.rounds, NL = A.treasure.length;
+  const ALL = [];
+  R.forEach((rd, r) => rd.counts.forEach((t, k) => ALL.push({ r: r, k: k, t: t })));
+  const MAXT = R[R.length - 1].counts[5];
+
+  function draw(stock, startCount) {
+    let s = stock, count = startCount || 0, souls = 0;
+    const reached = [], roundsDone = [];
+    for (let r = 0; r < R.length; r++) {
+      const rd = R[r];
+      if (count >= rd.counts[5]) continue;
+      for (let k = 0; k < 6; k++) {
+        const t = rd.counts[k];
+        if (t <= count) continue;
+        const need = (t - count) * CP;
+        if (s < need) {
+          return { count: count, souls: souls, avail: s, reached: reached, roundsDone: roundsDone,
+                   full: false, next: { r: r, k: k, need: need, short: need - s } };
+        }
+        s -= need; s += TR; count = t;
+        souls += rd.souls[k];
+        reached.push({ r: r, k: k, t: t, soul: rd.souls[k] });
+      }
+      souls += rd.extraSoul;
+      roundsDone.push(r);
+    }
+    return { count: count, souls: souls, avail: s, reached: reached, roundsDone: roundsDone, full: true, next: null };
+  }
+  function soulsAt(count) {
+    let souls = 0;
+    for (let r = 0; r < R.length; r++) {
+      let done = 0;
+      for (let k = 0; k < 6; k++) if (R[r].counts[k] <= count) { done++; souls += R[r].souls[k]; }
+      if (done === 6) souls += R[r].extraSoul;
+    }
+    return souls;
+  }
+  function nodeOf(count) {
+    let last = null;
+    for (let r = 0; r < R.length; r++) for (let k = 0; k < 6; k++) {
+      if (R[r].counts[k] <= count) last = { r: r, k: k, t: R[r].counts[k] };
+    }
+    return last;
+  }
+  /* 只用次数表达，不带"档"字 */
+  function nodeLabel(n) { return n ? (R[n.r].name + ' ' + n.t + ' 次') : '未达节点'; }
+  function tiersReached(count) { let n = 0; ALL.forEach(o => { if (o.t <= count) n++; }); return n; }
+  function netSpend(count) { return count * CP - tiersReached(count) * TR; }
+
+  /* 兑换结果按货币数量缓存（扫描式反推会反复问同一个值，缓存后快几十倍） */
+  const _exCache = new Map();
+  function optimalExchange(currency) {
+    const budget = Math.max(0, currency | 0);
+    const hit = _exCache.get(budget);
+    if (hit) return hit;
+    const buys = [];
+    const pool = A.treasure.map(items => items.map(it => ({ price: it[1], limit: it[2], bought: 0 }))
+                                              .sort((a, b) => a.price - b.price));
+    let spent = 0, returns = 0, highest = 0;
+    for (let l = 0; l < NL - 1; l++) {
+      const unlockNeed = LAYER_NEED[l + 1];
+      if (spent >= unlockNeed) { highest = l + 1; continue; }
+      if (budget < unlockNeed) break;
+      let needMore = unlockNeed - spent;
+      for (const it of pool[l]) {
+        if (needMore <= 0) break;
+        const left = budget - spent;
+        if (left < it.price) continue;
+        const canBuy = Math.min(it.limit - it.bought, Math.ceil(needMore / it.price), Math.floor(left / it.price));
+        if (canBuy <= 0) continue;
+        it.bought += canBuy; spent += canBuy * it.price;
+        returns += canBuy * LAYER_RET[l];
+        buys.push({ layer: l, price: it.price, count: canBuy });
+        needMore = unlockNeed - spent;
+      }
+      if (spent >= unlockNeed) highest = l + 1; else break;
+    }
+    let remaining = budget - spent;
+    for (let l = highest; l >= 0; l--) {
+      if (remaining <= 0) break;
+      for (const it of pool[l]) {
+        if (remaining < it.price) continue;
+        const canBuy = Math.min(it.limit - it.bought, Math.floor(remaining / it.price));
+        if (canBuy <= 0) continue;
+        it.bought += canBuy; spent += canBuy * it.price;
+        returns += canBuy * LAYER_RET[l];
+        buys.push({ layer: l, price: it.price, count: canBuy });
+        remaining -= canBuy * it.price;
+      }
+    }
+    const out = { spent: spent, returns: returns, left: budget - spent, buys: buys, highestLayer: highest + 1 };
+    _exCache.set(budget, out);
+    return out;
+  }
+  function targetPlan(currency, layerIdx, itemIdx, qty) {
+    const needUnlock = LAYER_NEED[layerIdx];
+    const tgt = A.treasure[layerIdx][itemIdx];
+    const order = [];
+    for (let l = 0; l < layerIdx; l++) {
+      A.treasure[l].map((it, i) => ({ l: l, i: i, price: it[1], limit: it[2] }))
+        .sort((a, b) => a.price - b.price)
+        .forEach(x => { for (let n = 0; n < x.limit; n++) order.push({ layer: x.l, item: x.i, price: x.price, unlock: true }); });
+    }
+    for (let n = 0; n < qty; n++) order.push({ layer: layerIdx, item: itemIdx, price: tgt[1], unlock: false });
+    let budget = Math.max(0, currency | 0), spent = 0, returns = 0, unlockSpent = 0;
+    const buys = [];
+    for (const o of order) {
+      if (o.unlock) { if (unlockSpent >= needUnlock) continue; }
+      else if (unlockSpent < needUnlock) continue;          // 层未解锁时不能买目标道具
+      if (budget < o.price) continue;
+      budget -= o.price; spent += o.price;
+      returns += LAYER_RET[o.layer];
+      if (o.unlock) unlockSpent += o.price;
+      buys.push({ layer: o.layer, item: o.item, price: o.price, unlock: o.unlock });
+    }
+    const done = buys.reduce((a, b) => a + (b.unlock ? 0 : 1), 0);
+    return { spent: spent, returns: returns, buys: buys, left: budget, unlockSpent: unlockSpent,
+             unlockNeed: needUnlock, targetDone: done, targetQty: qty,
+             targetCost: tgt[1] * qty, needTotal: needUnlock + tgt[1] * qty, complete: done >= qty };
+  }
+  function reachLoop(stock, baseCurrency, startCount, exchangeFn) {
+    let funded = 0, d = null, ex = null;
+    for (let i = 0; i < 24; i++) {
+      d = draw(stock + funded, startCount);
+      ex = exchangeFn((baseCurrency || 0) + d.souls);
+      if (ex.returns <= funded) break;
+      funded = ex.returns;
+    }
+    return { draw: d, count: d.count, currency: (baseCurrency || 0) + d.souls, returns: funded,
+             avail: d.avail, exchange: ex, tierReturns: d.reached.length * TR };
+  }
+  const _reachCache = new Map();
+  function reachOptimal(stock, baseCurrency, startCount) {
+    const key = stock + '|' + (baseCurrency || 0) + '|' + (startCount || 0);
+    const hit = _reachCache.get(key);
+    if (hit) return hit;
+    const out = reachLoop(stock, baseCurrency, startCount, s => optimalExchange(s));
+    _reachCache.set(key, out);
+    return out;
+  }
+
+  function neededStock(targetCount, baseCurrency, startCount, exchangeFn) {
+    startCount = startCount || 0;
+    if (targetCount <= startCount) return 0;
+    const fn = exchangeFn || (s => optimalExchange(s));
+    const hi = (targetCount - startCount) * CP + 40;
+    for (let s = 0; s <= hi; s++) if (reachLoop(s, baseCurrency, startCount, fn).count >= targetCount) return s;
+    return -1;
+  }
+  const _planCache = new Map();
+  function planState(stock, baseCurrency, startCount, layerIdx, itemIdx, qty) {
+    const key = [stock, baseCurrency || 0, startCount || 0, layerIdx, itemIdx, qty].join('|');
+    const hit = _planCache.get(key);
+    if (hit) return hit;
+    const loop = reachLoop(stock, baseCurrency, startCount, s => targetPlan(s, layerIdx, itemIdx, qty));
+    const need = LAYER_NEED[layerIdx] + A.treasure[layerIdx][itemIdx][1] * qty;
+    const out = { stock: stock, loop: loop, count: loop.count, currency: loop.currency, returns: loop.returns,
+                  exchange: loop.exchange, need: need, gap: Math.max(0, need - loop.currency) };
+    _planCache.set(key, out);
+    return out;
+  }
+  function neededStockForItem(layerIdx, itemIdx, qty, baseCurrency, startCount) {
+    const maxS = MAXT * CP + 60;
+    for (let s = 0; s <= maxS; s++) {
+      if (planState(s, baseCurrency, startCount, layerIdx, itemIdx, qty).exchange.complete) return s;
+    }
+    return -1;
+  }
+  let _holdMap = null;
+  function holdMap() {
+    if (_holdMap) return _holdMap;
+    const bound = MAXT * CP + 2, map = {};
+    for (let s = 0; s <= bound; s++) {
+      const c = reachOptimal(s, 0, 0).count;
+      if (!(c in map)) map[c] = s;
+    }
+    _holdMap = map;
+    return map;
+  }
+  function bestPacks(o) {
+    const packs = A.packs, baseStock = o.baseStock || 0, baseCurrency = o.baseCurrency || 0;
+    const startCount = o.startCount || 0;
+    const paid = packs.map((p, i) => i).filter(i => packs[i].type === '礼包');
+    /* 礼包同时给"消耗品"和"兑换货币"，两种资源都要累加；
+       "抽奖→得货币→兑换→返还消耗品→再抽奖"的迭代由 reachLoop / planState 内部完成 */
+    const cache = new Map();
+    const evalAt = (cons, exch) => {
+      const key = cons + '|' + exch;
+      let hit = cache.get(key);
+      if (hit) return hit;
+      let out;
+      if (o.mode === 'blades') {
+        const r = reachOptimal(baseStock + cons, baseCurrency + exch, startCount);
+        out = { count: r.count, currency: r.currency, returns: r.returns, ok: r.count >= o.targetCount };
+      } else if (o.mode === 'currency') {
+        const r = reachOptimal(baseStock + cons, baseCurrency + exch, startCount);
+        out = { count: r.count, currency: r.currency, returns: r.returns, ok: r.currency >= o.targetCurrency };
+      } else {
+        const st = planState(baseStock + cons, baseCurrency + exch, startCount, o.layerIdx, o.itemIdx, o.qty);
+        out = { count: st.count, currency: st.currency, returns: st.returns, need: st.need, gap: st.gap,
+                complete: st.exchange.complete, ok: st.exchange.complete === true };
+      }
+      cache.set(key, out);
+      return out;
+    };
+    let best = null;
+    const cnt = paid.map(() => 0);
+    (function walk(pos, cost, cons, exch) {
+      if (best && cost >= best.cost) return;                 // 剪枝：已不比当前最优便宜
+      if (pos === paid.length) {
+        const r = evalAt(cons, exch);
+        if (r.ok && (!best || cost < best.cost)) {
+          best = { cost: cost, cons: cons, exch: exch, res: r,
+                   picks: paid.map((gi, k) => ({ i: gi, n: cnt[k] })).filter(x => x.n > 0) };
+        }
+        return;
+      }
+      const p = packs[paid[pos]];
+      const lim = Math.max(0, p.limit - ((o.used && o.used[paid[pos]]) || 0));   // 已买的要扣掉，不能超限购
+      for (let n = 0; n <= lim; n++) {
+        cnt[pos] = n;
+        walk(pos + 1, cost + p.price * n, cons + p.cons * n, exch + p.exch * n);
+      }
+      cnt[pos] = 0;
+    })(0, 0, 0, 0);
+    return best
+      ? { ok: true, cost: best.cost, extra: best.cons, currency: best.exch, res: best.res,
+          picks: best.picks.map(x => ({ idx: x.i, pack: packs[x.i], count: x.n,
+                                        cons: packs[x.i].cons * x.n, exch: packs[x.i].exch * x.n,
+                                        money: packs[x.i].price * x.n })) }
+      : { ok: false };
+  }
+
+  return { key: key, A: A, MAXT: MAXT, draw: draw, soulsAt: soulsAt, nodeOf: nodeOf, nodeLabel: nodeLabel,
+           tiersReached: tiersReached, netSpend: netSpend, holdMap: holdMap,
+           optimalExchange: optimalExchange, targetPlan: targetPlan, reachLoop: reachLoop,
+           reachOptimal: reachOptimal, neededStock: neededStock, planState: planState,
+           neededStockForItem: neededStockForItem, bestPacks: bestPacks };
+}
+const ENG = {}; ORDER.forEach(k => { ENG[k] = makeEngine(k); });
+
+/* ============================ 活动周期（21 天一轮，每活动 7 天） ============================ */
+function fmtD(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function parseD(s) { const p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function dayStart(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function diffDays(a, b) {
+  const u1 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const u2 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.floor((u2 - u1) / 86400000);
+}
+function cycleRef(cfg) {
+  if (cfg.mode === 'manual' && cfg.anchorDate && ACTS[cfg.anchorAct]) {
+    const s = parseD(cfg.anchorDate), r = new Date(s);
+    r.setDate(s.getDate() - ACTS[cfg.anchorAct].slot);
+    return r;
+  }
+  const s = parseD(cfg.serverStart || '2026-05-20'), r = new Date(s);
+  r.setDate(s.getDate() + 7);
+  return r;
+}
+function cycleInfo(cfg, today) {
+  const ref = cycleRef(cfg);
+  const dd = diffDays(ref, today);
+  const cd = ((dd % 21) + 21) % 21;
+  const cycleNum = Math.floor(dd / 21) + 1;
+  const start = new Date(ref); start.setDate(ref.getDate() + (cycleNum - 1) * 21);
+  const acts = ORDER.map(k => {
+    const A = ACTS[k], s0 = A.slot, e0 = A.slot + 6;
+    const sd = new Date(start); sd.setDate(start.getDate() + s0);
+    const ed = new Date(start); ed.setDate(start.getDate() + e0);
+    const isActive = cd >= s0 && cd <= e0;
+    return { key: k, name: A.name, slot: s0, start: sd, end: ed, isActive: isActive,
+             dayIn: isActive ? cd - s0 + 1 : 0, left: isActive ? e0 - cd : 0, isPast: cd > e0 };
+  });
+  return { ref: ref, cd: cd, cycleNum: cycleNum, start: start, acts: acts,
+           current: acts.find(a => a.isActive) || null, today: today };
+}
+/* 该活动"接下来要参与的那一期"窗口：进行中=本期；本期已过=下一期；未开始=本期 */
+function windowFor(actKey, cfg, today) {
+  const info = cycleInfo(cfg, today);
+  const a = info.acts.find(x => x.key === actKey);
+  if (a.isActive) return { start: a.start, end: a.end, active: true, next: false };
+  if (a.isPast) {
+    const s = new Date(a.start); s.setDate(s.getDate() + 21);
+    const e = new Date(a.end); e.setDate(e.getDate() + 21);
+    return { start: s, end: e, active: false, next: true };
+  }
+  return { start: a.start, end: a.end, active: false, next: false };
+}
+/* 还能买几天福利：进行中 = 今天之后的天数（今天的已可获得 → 视为已买过）；未开始 = 整期 7 天；已结束 = 0 */
+function buyableDays(actKey, cfg, today) {
+  const w = windowFor(actKey, cfg, today);
+  if (w.active) return Math.max(0, diffDays(today, w.end));
+  if (dayStart(w.start) > dayStart(today)) return Math.min(7, diffDays(today, w.start) + 7);
+  return 0;
+}
+/* 协会/宗门商店：只算"今天以后"的重置机会（今天的视为已买过），每周一重置 */
+function assocInfo(actKey, cfg, today) {
+  const w = windowFor(actKey, cfg, today);
+  const t0 = dayStart(today);
+  const from = w.active ? new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + 1) : dayStart(w.start);
+  const end = dayStart(w.end);
+  if (end < from) return { count: 0, next: null, daysToNext: null };
+  let count = 0, next = null, cur = new Date(from);
+  while (cur <= end) {
+    if (cur.getDay() === 1) { count++; if (!next) next = new Date(cur); }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return { count: count, next: next, daysToNext: next ? diffDays(today, next) : null };
+}
+
+const CALC = { ACTS: ACTS, ENG: ENG, ORDER: ORDER, LAYER_NEED: LAYER_NEED, LAYER_RET: LAYER_RET,
+               cycleInfo: cycleInfo, cycleRef: cycleRef, windowFor: windowFor,
+               assocInfo: assocInfo, buyableDays: buyableDays,
+               diffDays: diffDays, fmtD: fmtD, parseD: parseD, makeEngine: makeEngine };
+if (typeof globalThis !== 'undefined') globalThis.CALC = CALC;
+if (typeof module !== 'undefined') module.exports = CALC;
+</script>
+
+<script id="ui">
+(function () {
+  const { ACTS, ENG, ORDER, LAYER_NEED, LAYER_RET, cycleInfo, windowFor, assocInfo, buyableDays, fmtD, diffDays } = globalThis.CALC;
+  const $ = id => document.getElementById(id);
+  const fmt = n => Number(n).toLocaleString('zh-CN');
+  const KEY = 'sanZhouCalc.v2';
+  const CLR = { shanhai: '#12b76a', pomu: '#f59e0b', jsh: '#2f6bff' };
+  const today = dayStart(new Date());
+  function dayStart(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  /* ---------------- 状态 ---------------- */
+  const blank = () => ({ act: 'jsh', cycleMode: 'auto', serverStart: '2026-05-20', anchorAct: 'jsh',
+                         anchorDate: '', stock: {}, exchStock: {}, start: {}, target: {}, packs: {}, treasure: {}, reverse: {}, pickNode: {} });
+  let S = blank();
+  try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+  ORDER.forEach(k => {
+    /* 库存/货币默认留空（null），避免手机端还要先删掉 0 才能输入 */
+    if (S.stock[k] === 0) S.stock[k] = null;
+    if (S.exchStock[k] === 0) S.exchStock[k] = null;
+    if (!S.start) S.start = {};      /* 已抽次数默认留空（0 与空等价）；落盘统一在 normalizeState 里做 */
+    if (!S.target[k]) S.target[k] = { mode: '', round: 0, count: 0 };
+    if (!S.packs[k]) S.packs[k] = {};
+    if (!S.treasure[k]) S.treasure[k] = {};
+    if (S.reverse[k] == null) S.reverse[k] = 0;
+    if (!S.pickNode) S.pickNode = {};
+    if (S.pickNode[k] == null) S.pickNode[k] = 0;
+  });
+  if (ORDER.indexOf(S.act) < 0) S.act = 'jsh';
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  /* 一次性补齐老状态里"显示有值、参与计算却是空"的字段，并落盘 */
+  (function normalizeState() {
+    let changed = false;
+    if (S.cycleMode === 'manual' && !S.anchorDate) { S.anchorDate = fmtD(today); changed = true; }
+    ORDER.forEach(k => {
+      if (!S.start) S.start = {};
+      if (S.start[k] === undefined || S.start[k] === 0) { S.start[k] = null; changed = true; }
+      const t = S.target[k];
+      if (t.mode === 'round' && !(t.round >= 1)) { t.round = 1; changed = true; }
+      if (t.mode === 'count' && !(t.count >= 1)) { t.count = 100; changed = true; }
+    });
+    if (changed) save();
+  })();
+  const actKey = () => S.act, E = () => ENG[actKey()], A = () => ACTS[actKey()];
+  const calCfg = () => ({ mode: S.cycleMode, serverStart: S.serverStart, anchorAct: S.anchorAct, anchorDate: S.anchorDate });
+  /* 礼包统一用价格称呼，如"30元礼包" */
+  const packLabel = p => (p.type === '礼包' ? fmt(p.price) + '元礼包' : p.name);
+  /* 已抽次数：留空＝从 0 开始；之前的档位奖励视为已领取（引擎 startCount 的语义） */
+  const startOf = () => Math.max(0, Math.min(E().MAXT, Math.floor(S.start[actKey()] || 0)));
+  const _holdCache = new Map();
+  const holdMapFor = s0 => {
+    const sig = s0 + '|' + selSig();
+    const hit = _holdCache.get(sig);
+    if (hit) return hit;
+    const map = {};
+    A().rounds.forEach(rd => rd.counts.forEach(c => { map[c] = c <= s0 ? 0 : neededStockPath(c, 0, s0); }));
+    _holdCache.set(sig, map);
+    return map;
+  };
+
+  /* ==================== 按玩家实际点选的兑换路径（B 口径：没点的不算返还） ==================== */
+  const _pathCache = new Map(), _needCache = new Map(), _bpCache = new Map();
+  /* 严格锁：前面各层"已选消耗"合计够门槛，本层才开放；未开放的层里若有残留选择，不计入路径 */
+  function openLayers() {
+    const A0 = A(), sel = S.treasure[actKey()] || {}, cost = A0.treasure.map(() => 0);
+    let spend = 0;
+    A0.treasure.forEach((items, l) => {
+      if (spend >= LAYER_NEED[l]) items.forEach((it, i) => {
+        const q = Math.max(0, Math.min(it[2], sel[l + '-' + i] || 0));
+        cost[l] += it[1] * q;
+      });
+      spend += cost[l];
+    });
+    const before = [];
+    { let acc = 0; cost.forEach((c, l) => { before[l] = acc; acc += c; }); }
+    return { cost: cost, before: before, open: before.map((b, l) => b >= LAYER_NEED[l]) };
+  }
+  function selectionCost() {
+    const sel = S.treasure[actKey()] || {}, A0 = A(), list = [], locked = [];
+    let spend = 0;
+    A0.treasure.forEach((items, l) => {
+      const open = spend >= LAYER_NEED[l];
+      items.forEach((it, i) => {
+        const q = Math.max(0, Math.min(it[2], sel[l + '-' + i] || 0));
+        if (q <= 0) return;
+        if (!open) { locked.push({ l: l, i: i, q: q }); return; }
+        spend += it[1] * q;
+        list.push({ l: l, i: i, q: q, price: it[1], ret: LAYER_RET[l], name: it[0] });
+      });
+    });
+    return { list: list, spend: spend, locked: locked };
+  }
+  const selSig = sc => (sc || selectionCost()).list.map(p => p.l + ':' + p.i + ':' + p.q).join(',');
+  /* 按路径花掉货币 → 能拿到的返还（钱不够就按顺序先买得起多少买多少） */
+  function pathReturns(budget) {
+    const list = selectionCost().list;
+    let left = budget, ret = 0, spent = 0, done = 0;
+    for (const p of list) {
+      const n = Math.min(p.q, Math.floor(left / p.price));
+      if (n <= 0) continue;
+      spent += n * p.price; left -= n * p.price; ret += n * p.ret; done += n;
+    }
+    return { spent: spent, returns: ret, left: left, done: done, total: list.reduce((a, x) => a + x.q, 0) };
+  }
+  /* 抽奖 → 得货币 → 按路径兑换 → 返还消耗品 → 再抽奖，迭代到收敛 */
+  function pathReach(stock, baseCurrency, start) {
+    const s0 = start || 0;
+    const base = (baseCurrency || 0) + E().soulsAt(s0);   /* 已抽次数带来的历史精魄计入可用 */
+    const sig = s0 + '|' + stock + '|' + (baseCurrency || 0) + '|' + selSig();
+    const hit = _pathCache.get(sig);
+    if (hit) return hit;
+    let funded = 0, d = null, ex = null;
+    for (let i = 0; i < 24; i++) {
+      d = E().draw(stock + funded, s0);
+      ex = pathReturns(base + d.souls);
+      if (ex.returns <= funded) break;
+      funded = ex.returns;
+    }
+    const out = { count: d.count, currency: base + d.souls, returns: funded,
+                  tierReturns: d.reached.length * A().tierReturn, avail: d.avail,
+                  pureCount: E().draw(stock, s0).count };
+    _pathCache.set(sig, out);
+    return out;
+  }
+  /* 到某个次数最少要自备多少消耗品（次数随库存单调 → 二分） */
+  function neededStockPath(tc, baseCurrency, start) {
+    const s0 = start || 0;
+    if (tc <= s0) return 0;
+    const sig = tc + '|' + s0 + '|' + (baseCurrency || 0) + '|' + selSig();
+    const hit = _needCache.get(sig);
+    if (hit != null) return hit;
+    let lo = 0, hi = (tc - s0) * A().costPerChallenge + 40, out = -1;
+    if (pathReach(hi, baseCurrency, s0).count >= tc) {
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (pathReach(mid, baseCurrency, s0).count >= tc) hi = mid; else lo = mid + 1; }
+      out = lo;
+    }
+    _needCache.set(sig, out);
+    return out;
+  }
+  /* 达成次数目标所需的礼包组合（评估口径 = 玩家路径） */
+  function bestPacksPath(o) {
+    const sig = [o.mode, o.targetCount || 0, o.targetCurrency || 0, o.baseStock, o.baseCurrency,
+                 o.startCount || 0, JSON.stringify(o.used || {}), selSig()].join('|');
+    const hit = _bpCache.get(sig);
+    if (hit) return hit;
+    const packs = A().packs, paid = packs.map((p, i) => i).filter(i => packs[i].type === '礼包');
+    const cache = new Map();
+    const evalAt = (cons, exch) => {
+      const k = cons + '|' + exch, h = cache.get(k);
+      if (h) return h;
+      const r = pathReach(o.baseStock + cons, o.baseCurrency + exch, o.startCount || 0);
+      const out = { count: r.count, currency: r.currency, returns: r.returns,
+                    ok: (o.mode === 'currency' ? r.currency >= o.targetCurrency : r.count >= o.targetCount) };
+      cache.set(k, out); return out;
+    };
+    let best = null; const cnt = paid.map(() => 0);
+    (function walk(pos, cost, cons, exch) {
+      if (best && cost >= best.cost) return;
+      if (pos === paid.length) {
+        const r = evalAt(cons, exch);
+        if (r.ok && (!best || cost < best.cost)) best = { cost: cost, cons: cons, exch: exch, res: r,
+          picks: paid.map((gi, k) => ({ i: gi, n: cnt[k] })).filter(x => x.n > 0) };
+        return;
+      }
+      const p = packs[paid[pos]], lim = Math.max(0, p.limit - ((o.used && o.used[paid[pos]]) || 0));
+      for (let n = 0; n <= lim; n++) { cnt[pos] = n; walk(pos + 1, cost + p.price * n, cons + p.cons * n, exch + p.exch * n); }
+      cnt[pos] = 0;
+    })(0, 0, 0, 0);
+    const out = best ? { ok: true, cost: best.cost, extra: best.cons, currency: best.exch, res: best.res,
+      picks: best.picks.map(x => ({ idx: x.i, pack: packs[x.i], count: x.n, cons: packs[x.i].cons * x.n,
+                                    exch: packs[x.i].exch * x.n, money: packs[x.i].price * x.n })) } : { ok: false };
+    _bpCache.set(sig, out);
+    return out;
+  }
+  /* 已买礼包数量：估算"还需再充多少"时扣限购用（追加语义） */
+  function usedPacks() {
+    const m = {}, sel = S.packs[actKey()] || {};
+    A().packs.forEach((p, i) => { if (p.type === '礼包' && (sel[i] || 0) > 0) m[i] = sel[i]; });
+    return m;
+  }
+  /* ==================== 预估充值礼包推荐（资源预设 / 反推表 / 宝库兑换 统一复用） ==================== */
+  let _recMap = {};
+  function recLine(o, label) {
+    const b = bestPacksPath(o);
+    if (!b || !b.ok || !b.picks.length) return '';
+    const txt = b.picks.map(p => `${packLabel(p.pack)}×${p.count}`).join(' ＋ ');
+    let after = '';
+    if (o.mode === 'blades') {
+      const c = pathReach(o.baseStock + b.extra, o.baseCurrency + b.currency, o.startCount || 0).count;
+      after = `（买完可达 ${fmt(c)} 次）`;
+    }
+    const key = 'r' + Object.keys(_recMap).length;
+    _recMap[key] = b.picks;
+    return `<span class="pill blue">${label || '预估充值'} ${fmt(b.cost)} 元</span>`
+      + `<span class="lk">${txt}${after}</span>`
+      + `<button class="btn" data-rec="${key}" style="padding:4px 10px;font-size:12px">填入礼包</button>`;
+  }
+  function bindRec(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-rec]').forEach(btn => btn.onclick = () => {
+      const picks = _recMap[btn.dataset.rec];
+      if (!picks) return;
+      picks.forEach(p => {
+        const cur = S.packs[actKey()][p.idx] || 0;
+        S.packs[actKey()][p.idx] = Math.min(p.pack.limit, cur + p.count);
+      });
+      save(); renderAll(); toast('已填入礼包');
+    });
+  }
+  let toastT = null;
+  function toast(msg, kind) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (kind === 'warn' ? ' warn' : '');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => { el.className = 'toast'; }, 1800);
+  }
+
+  /* ---------------- 资源合计 ---------------- */
+  function income() {
+    const A0 = A(), sel = S.packs[actKey()];
+    const days = buyableDays(actKey(), calCfg(), today);
+    const ai = assocInfo(actKey(), calCfg(), today);
+    let daily = 0, dailyExch = 0, dailyDetail = [], bought = 0, boughtExch = 0, money = 0, kinds = 0;
+    A0.packs.forEach((p, i) => {
+      if (p.type === '礼包') {
+        const n = Math.max(0, Math.min(p.limit, sel[i] || 0));
+        bought += p.cons * n; boughtExch += p.exch * n; money += p.price * n;
+        if (n > 0) kinds++;
+      } else {
+        const n = Math.min(p.limit, p.perDay * days);
+        daily += p.cons * n; dailyExch += p.exch * n;
+        dailyDetail.push({ pack: p, n: n });
+      }
+    });
+    const assoc = A0.assoc * ai.count;
+    const stock = S.stock[actKey()] || 0, cur = S.exchStock[actKey()] || 0;
+    return { days: days, ai: ai, daily: daily, dailyExch: dailyExch, dailyDetail: dailyDetail,
+             assoc: assoc, assocCount: ai.count, bought: bought, boughtExch: boughtExch, money: money,
+             kinds: kinds, stock: stock, currency: cur,
+             baseStock: stock + daily + assoc, baseCurrency: cur + dailyExch,
+             totalStock: stock + daily + assoc + bought, totalCurrency: cur + dailyExch + boughtExch };
+  }
+  const hasTarget = () => { const t = S.target[actKey()]; return !!(t.mode && (t.mode === 'round' ? t.round : t.count)); };
+  function targetCount() {
+    const t = S.target[actKey()];
+    if (!hasTarget()) return null;
+    return t.mode === 'round' ? A().rounds[t.round - 1].counts[5] : Math.max(1, Math.floor(t.count));
+  }
+
+  /* ---------------- 顶部 ---------------- */
+  function renderHeader() {
+    const info = cycleInfo(calCfg(), today);
+    $('actTabs').innerHTML = ORDER.map(k => {
+      const a = info.acts.find(x => x.key === k), A0 = ACTS[k];
+      const tag = a.isActive ? `进行中 第 ${a.dayIn}/7 天 · 剩 ${a.left} 天`
+                : (a.isPast ? '本期已结束' : `${fmtD(a.start).slice(5)} 开启`);
+      const ref = (A0.dataNote && A0.dataNote.indexOf('沿用参照') >= 0) ? ' · 参照数据' : '';
+      return `<button data-act="${k}" class="${k === actKey() ? 'active' : ''}">
+        <b><span class="dot" style="background:${CLR[k]}"></span>${A0.name}</b>
+        <small>${fmtD(a.start).slice(5)} ~ ${fmtD(a.end).slice(5)} · ${tag}${ref}</small>
+        <small>${A0.consumable} / ${A0.exchange}</small></button>`;
+    }).join('');
+    $('actTabs').querySelectorAll('button').forEach(b => b.onclick = () => { S.act = b.dataset.act; save(); renderAll(); });
+    const c = info.current;
+    $('heroNote').textContent = (c ? `当前进行中：${ACTS[c.key].name}（第 ${c.dayIn}/7 天）` : '当前没有活动在进行') +
+      '｜三个活动轮换，每个 7 天，21 天一轮';
+  }
+
+  function renderCycle() {
+    $('cycleMode').value = S.cycleMode;
+    $('serverStart').value = S.serverStart;
+    $('anchorAct').innerHTML = ORDER.map(k => `<option value="${k}">${ACTS[k].name}</option>`).join('');
+    $('anchorAct').value = S.anchorAct;
+    $('anchorDate').value = S.anchorDate || fmtD(today);
+    const manual = S.cycleMode === 'manual';
+    $('wrapServer').style.display = manual ? 'none' : '';
+    $('wrapAnchorAct').style.display = manual ? '' : 'none';
+    $('wrapAnchorDate').style.display = manual ? '' : 'none';
+    const cs = $('cycleSub');
+    if (cs) cs.textContent = manual
+      ? `手动锚定：${ACTS[S.anchorAct] ? ACTS[S.anchorAct].name : ''} 开始于 ${S.anchorDate || fmtD(today)}`
+      : `开服 ${S.serverStart}`;
+  }
+
+  /* ---------------- 我的资源 ---------------- */
+  /* 只在非聚焦时写回输入框值，避免输入/删改时光标被重置到最左 */
+  function setVal(el, v) {
+    if (el && document.activeElement !== el && String(el.value) !== String(v)) el.value = v;
+  }
+  function renderRes() {
+    const A0 = A(), inc = income(), t = S.target[actKey()];
+    const labStock = $('labStock'); if (labStock) labStock.textContent = '库存 ' + A0.consumable;
+    const labExch = $('labExchStock'); if (labExch) labExch.textContent = '库存 ' + A0.exchange;
+    setVal($('stock'), S.stock[actKey()] == null ? '' : S.stock[actKey()]);
+    setVal($('exchStock'), S.exchStock[actKey()] == null ? '' : S.exchStock[actKey()]);
+    setVal($('startCount'), S.start[actKey()] == null ? '' : S.start[actKey()]);
+    $('targetRound').innerHTML = A0.rounds.map((r, i) =>
+      `<option value="${i + 1}">${r.name}（跑满 ${r.counts[5]} 次）</option>`).join('');
+    setVal($('targetRound'), t.round >= 1 ? t.round : 1);
+    setVal($('targetCount'), t.count || '');
+    $('targetSwitch').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === (t.mode || '')));
+    $('targetRound').style.display = t.mode === 'round' ? '' : 'none';
+    $('targetCount').style.display = t.mode === 'count' ? '' : 'none';
+
+    const parts = inc.dailyDetail.map(d => `${d.pack.name} ${d.n} 个`).join(' ＋ ');
+    const perDayFree = A0.packs.reduce((a, p) => a + (p.type === '礼包' ? 0 : p.cons * p.perDay), 0);
+    const w = windowFor(actKey(), calCfg(), today);
+    const reset = inc.ai.next
+      ? `<span class="pill ok">${inc.ai.daysToNext === 0 ? '今天' : inc.ai.daysToNext + ' 天后'}（${fmtD(inc.ai.next)} ${WEEK[inc.ai.next.getDay()]}）重置，可再买 ${A0.assoc} 个</span>`
+      : `<span class="pill ghost">本期已无重置机会，无法再买</span>`;
+    $('incomeBox').innerHTML = `
+      <div class="grid g2">
+        <div class="card">
+          <h4>每日福利 / 绑定<span class="pill ${w.active ? 'ok' : 'warn'}">剩 ${inc.days} 天</span>${w.next ? `<span class="pill warn">下一期 ${fmtD(w.start).slice(5)} 开启</span>` : ''}</h4>
+          <div class="meta">${inc.days > 0 ? `之后 ${inc.days} 天 · 每天 ${perDayFree} 个 ＝ <b>${fmt(inc.daily)}</b> 个${A0.consumable}` : '本期已结束'}
+            <br><span class="lk">${parts}</span></div>
+        </div>
+        <div class="card">
+          <h4>${A0.assocName}（每周一重置）<span class="pill ${inc.ai.count ? 'ok' : 'ghost'}">剩 ${inc.ai.count} 次</span></h4>
+          <div class="meta">可再买 <b>${fmt(inc.assoc)}</b> 个${A0.consumable}（${A0.assoc} × ${inc.ai.count}）
+            <br>${reset}</div>
+        </div>
+      </div>`;
+
+    /* 预估充值礼包推荐：按目标次数（从零最省，不含已买礼包） */
+    const tcRec = targetCount();
+    const resRec = $('resRec');
+    if (resRec) {
+      resRec.innerHTML = (tcRec && tcRec <= E().MAXT)
+        ? `<div class="recLine">${recLine({ mode: 'blades', targetCount: tcRec, baseStock: inc.baseStock, baseCurrency: inc.baseCurrency, startCount: startOf() }, '预估充值')}</div>`
+        : '';
+      bindRec(resRec);
+    }
+  }
+
+  /* ---------------- 综合分析 ---------------- */
+  function renderAnalysis() {
+    const A0 = A(), E0 = E(), inc = income();
+    const s0 = startOf();
+    const res = pathReach(inc.totalStock, inc.totalCurrency, s0);   /* 含你已点选的兑换返还 */
+    const pure = E0.draw(inc.totalStock, s0).count;                 /* 纯抽奖：不兑换 */
+    const cur = E0.nodeOf(res.count);
+    const tc = targetCount();
+    const overCap = !!(tc && tc > E0.MAXT);   /* 超上限：不进入逐值扫描，否则页面会长时间无响应 */
+    const needStock = (tc && !overCap) ? neededStockPath(tc, inc.totalCurrency, s0) : null;
+    const canDo = tc ? res.count >= tc : null;
+    const gap = (tc && !overCap) ? Math.max(0, needStock - inc.totalStock) : null;
+
+    /* 完成时间预测（可复核的算式）：
+       1 期 = 21 天（本活动每 21 天轮到一次）。每期净攒 =
+         整期福利/绑定（7 天 × 每天 7 个，按礼包限购上限算整期）
+       + 协会/宗门商店（7 天窗口内必定只跨到 1 个周一 → 1 次 × assoc）
+       + 已选礼包（限购按活动期内，每期都能重买） */
+    /* 囤货天数：只看免费收入（每周一商店 assoc 个 + 每 3 周活动期内 7 天福利 perDaily 个），不含礼包 */
+    const perDaily = A0.packs.reduce((a, p) => a + (p.type === '礼包' ? 0 : p.cons * p.limit), 0);
+    const perDayRate = A0.assoc / 7 + perDaily / 21;
+    const needNoPacks = (tc && !overCap) ? neededStockPath(tc, inc.baseCurrency, s0) : null;   // 不含礼包
+    const gapNoPacks = (tc && !overCap) ? Math.max(0, needNoPacks - inc.baseStock) : null;
+    const days = (tc && !overCap && !canDo && gapNoPacks > 0 && perDayRate > 0) ? Math.ceil(gapNoPacks / perDayRate) : 0;
+    const daysDate = days > 0 ? new Date(today.getFullYear(), today.getMonth(), today.getDate() + days) : null;
+
+    /* 一句话结论 */
+    let lead = (s0 > 0 ? `已抽 <b>${fmt(s0)}</b> 次 · 本期还剩 <b>${fmt(E0.MAXT - s0)}</b> 次。` : '')
+      + (res.returns > 0 && pure !== res.count
+        ? `本期最多能到 纯抽奖 <b>${fmt(pure)}</b> 次 ｜ 含兑换返还 <b>${fmt(res.count)}</b> 次`
+        : `本期最多能到 <b>${fmt(res.count)}</b> 次`)
+      + `（${E0.nodeLabel(cur)}），累计 <b>${fmt(res.currency)}</b> ${A0.exchange}。`;
+    if (tc) {
+      lead += overCap
+        ? `目标 <b>${fmt(tc)} 次</b>超出本期上限（最多 <b>${fmt(E0.MAXT)} 次</b>）。`
+        : canDo
+        ? `目标 <b>${fmt(tc)} 次</b>已满足 ✅`
+        : `距目标 <b>${fmt(tc)} 次</b>还差 <b>${fmt(gap)} 个${A0.consumable}</b>。`;
+    } else {
+      lead += `选个目标会自动算出要买什么。`;
+    }
+
+    let html = `<div class="lead">${lead}</div>
+      <div class="kpis">
+        <div class="kpi"><span>可用${A0.consumable}</span><b class="mono">${fmt(inc.totalStock)}</b>
+          <small>库存 + 福利 + ${A0.assocName} + 礼包</small></div>
+        <div class="kpi"><span>最大可达</span><b class="mono">${fmt(res.count)} 次</b>
+          <small>${(res.returns > 0 && pure !== res.count) ? `纯抽奖 ${fmt(pure)} 次 · ` : ''}${E0.nodeLabel(cur)}</small></div>
+        ${tc ? (overCap
+          ? `<div class="kpi warn"><span>目标 ${fmt(tc)} 次</span><b class="mono">超出上限</b>
+              <small>本期最多 ${fmt(E0.MAXT)} 次</small></div>`
+          : canDo
+          ? `<div class="kpi hi"><span>目标 ${fmt(tc)} 次</span><b class="mono">剩余 ${fmt(Math.max(0, inc.totalStock - needStock))} 个</b>
+              <small>已满足 · ${A0.consumable}</small></div>`
+          : `<div class="kpi warn"><span>距目标 ${fmt(tc)} 次</span><b class="mono">差 ${fmt(gap)} 个</b>
+              <small>${days > 0 ? `约需囤 <b class="hi-num">${fmt(days)}</b> 天 · <b class="hi-num">${fmtD(daysDate)}</b>` : A0.consumable}</small></div>`) : ''}
+      </div>
+      <div class="chain">
+        <div class="node"><em>已拥有</em><b class="mono">${fmt(inc.stock)}</b></div><div class="arrow">＋</div>
+        <div class="node"><em>剩余 ${inc.days} 天福利</em><b class="mono">${fmt(inc.daily)}</b></div><div class="arrow">＋</div>
+        <div class="node"><em>${A0.assocName}</em><b class="mono">${fmt(inc.assoc)}</b></div><div class="arrow">＋</div>
+        <div class="node"><em>礼包</em><b class="mono">${fmt(inc.bought)}</b></div><div class="arrow">＋</div>
+        <div class="node"><em>轮次奖励</em><b class="mono">${fmt(res.tierReturns)}</b></div><div class="arrow">＋</div>
+        <div class="node hi"><em>兑换后返还</em><b class="mono">+${fmt(res.returns)}</b></div>
+        <div class="arrow">＝</div>
+        <div class="node hi"><em>总计投入</em><b class="mono">${fmt(inc.totalStock + res.tierReturns + res.returns)}</b></div>
+      </div>`;
+
+    $('analysis').innerHTML = html;
+  }
+
+  /* 礼包栏副标题（收费方案折叠块已按用户要求删除，这里只保留已选礼包金额） */
+  function renderRec() {
+    const inc = income(), sub = $('packSub');
+    if (sub) sub.textContent = inc.money > 0 ? `已选 ${fmt(inc.money)} 元` : '未选礼包';
+  }
+
+  /* 充值汇总（重置按钮上方） */
+  function renderRecharge() {
+    const A0 = A(), E0 = E(), inc = income(), tc = targetCount(), sel = S.packs[actKey()];
+    const picks = A0.packs.map((p, i) => ({ p: p, n: Math.max(0, Math.min(p.limit, sel[i] || 0)) }))
+                          .filter(x => x.n > 0 && x.p.price > 0);
+    const reach = pathReach(inc.totalStock, inc.totalCurrency, startOf()).count;
+    const done = tc ? reach >= tc : null;
+    const verdict = tc ? (done ? '已达成目标（' + fmt(tc) + ' 次）' : '未达成（可达 ' + fmt(reach) + ' / ' + fmt(tc) + ' 次）') : '';
+    const rsub = $('rechSub');
+    if (rsub) rsub.textContent = `累计 ${fmt(inc.money)} 元${tc ? (done ? ' · 已达成' : ' · 未达成') : ''}`;
+    /* 综合分析下方的精简版 */
+    $('rechargeMini').innerHTML = `<div class="miniRow">
+      <span>充值汇总</span><b>${fmt(inc.money)} 元</b>
+      ${verdict ? `<span class="pill ${done ? 'ok' : 'warn'}">${verdict}</span>` : ''}
+    </div>`;
+    /* 页面底部：只显示一个总额 */
+    $('rechargeBox').innerHTML = `<div class="row"><span class="recharge">
+      <b>${fmt(inc.money)}</b> <span class="lk">元</span></span></div>`;
+  }
+
+  /* ---------------- 礼包（点击 +1，设置按钮 -1） ---------------- */
+  function bumpPack(i, delta) {
+    const p = A().packs[i], cur = S.packs[actKey()][i] || 0;
+    if (delta > 0 && cur >= p.limit) { toast(`${packLabel(p)} 已达限购上限 ${p.limit} 次`, 'warn'); return; }
+    S.packs[actKey()][i] = Math.max(0, Math.min(p.limit, cur + delta));
+    save(); renderAll();
+  }
+  /* 礼包栏「简单推荐」：按当前库存和目标算“从零最省”的礼包组合（不含兑换路径） */
+  function packRecHtml() {
+    const inc = income(), tc = targetCount(), s0 = startOf();
+    if (!tc || tc > E().MAXT) return '';
+    const b = bestPacksPath({ mode: 'blades', targetCount: tc, baseStock: inc.baseStock,
+                              baseCurrency: inc.baseCurrency, startCount: s0 });
+    if (!b || !b.ok || !b.picks.length) return '';
+    const cons = b.picks.reduce((a, p) => a + (p.cons || 0), 0);
+    const exch = b.picks.reduce((a, p) => a + (p.exch || 0), 0);
+    const after = pathReach(inc.baseStock + cons, inc.baseCurrency + exch, s0).count;
+    const txt = b.picks.map(p => `${packLabel(p.pack)}×${p.count}`).join(' ＋ ');
+    return `<div class="recLine">
+      <span class="pill ok">按缺口最省 ¥${fmt(b.cost)}</span>
+      <span class="lk">${txt}（买完可达 ${fmt(after)} 次）</span>
+    </div>`;
+  }
+
+  function renderPacks() {
+    const A0 = A(), sel = S.packs[actKey()], inc = income();
+    $('packHead').innerHTML = `
+      <div class="row">
+        <span class="pill blue">共给 ${fmt(inc.bought)} ${A0.consumable} / ${fmt(inc.boughtExch)} ${A0.exchange}</span>
+        <span class="pill">花费 ${fmt(inc.money)} 元</span>
+        <button class="btn" id="clearPacks" ${inc.kinds ? '' : 'disabled'}>清空礼包</button>
+      </div>` + packRecHtml();
+    $('packList').innerHTML = A0.packs.map((p, i) => {
+      if (p.type !== '礼包') return '';   /* 每日福利/每日绑定已在“我的资源”里展示，礼包栏不重复 */
+      const n = Math.max(0, Math.min(p.limit, sel[i] || 0));
+      const full = n >= p.limit;
+      return `<div class="card mini clickable ${full ? 'muted' : ''}" data-pack="${i}">
+        <h4><span>${packLabel(p)}</span></h4>
+        <div class="meta">${A0.consumable}×${p.cons} · ${A0.exchange}×${fmt(p.exch)}<br>限购 ${p.limit} 次</div>
+        <div class="qty sm">
+          <button data-dec="${i}" ${n <= 0 ? 'disabled' : ''}>−</button>
+          <span class="num">${n}</span>
+          <button data-inc="${i}" ${full ? 'disabled' : ''}>＋</button>
+        </div>
+      </div>`;
+    }).join('');
+    const cp = $('clearPacks');
+    if (cp) cp.onclick = () => {
+      A().packs.forEach((p, i) => { if (p.type === '礼包') delete S.packs[actKey()][i]; });
+      save(); renderAll(); toast('已清空礼包');
+    };
+    $('packList').querySelectorAll('[data-inc]').forEach(b => b.onclick = e => { e.stopPropagation(); bumpPack(+b.dataset.inc, 1); });
+    $('packList').querySelectorAll('[data-dec]').forEach(b => b.onclick = e => { e.stopPropagation(); bumpPack(+b.dataset.dec, -1); });
+    $('packList').querySelectorAll('.card.clickable').forEach(c => c.onclick = () => bumpPack(+c.dataset.pack, 1));
+  }
+
+  /* ---------------- 挑战轮次参考表（默认收起，用次数表达） ---------------- */
+  function renderRoundTable() {
+    const A0 = A(), E0 = E(), inc = income();
+    const labRev = $('labReverse'); if (labRev) labRev.textContent = '目标 ' + A0.exchange + '（如 2200）';
+    const s0 = startOf();
+    const holds = holdMapFor(s0);
+    const res = pathReach(inc.totalStock, inc.totalCurrency, s0);
+    const rv = Math.max(0, Math.floor(S.reverse[actKey()] || 0));
+    const pick = Math.max(0, Math.floor((S.pickNode || {})[actKey()] || 0));
+
+    /* 目标兑换货币 → 两种方案：① 纯抽奖要多少次 ② 抽奖＋礼包要充多少 */
+    let nodeNeed = 0;
+    /* 反推①纯抽奖：已有货币（库存＋福利＋已抽次数历史精魄）＋ 累计到该节点的精魄 ≥ 目标 */
+    if (rv > 0) A0.rounds.forEach(rd => rd.counts.forEach(c => {
+      if (!nodeNeed && c > s0 && inc.baseCurrency + E0.soulsAt(c) >= rv) nodeNeed = c;
+    }));
+
+    setVal($('reverseExch'), rv > 0 ? rv : '');
+    $('reverseTop').innerHTML = (rv > 0
+      ? `<span class="pill ghost">① 纯抽奖</span><span class="lk">约 ${nodeNeed ? fmt(nodeNeed) + ' 次' : '超出可达范围'}</span>`
+      : '<span class="lk">输入目标兑换货币，或直接点下面的次数</span>');
+    const rsub = $('roundSub');
+    if (rsub) rsub.textContent = (rv > 0 ? `目标 ${fmt(rv)} ${A0.exchange}` : '可点选次数');
+
+    $('roundTable').innerHTML = A0.rounds.map((rd, r) => {
+      const chips = rd.counts.map((c, k) => {
+        const so = E0.soulsAt(c) - E0.soulsAt(s0), hold = holds[c] != null ? holds[c] : 0;
+        const reach = res.count >= c;
+        const n = E0.nodeOf(res.count), isCur = n && n.r === r && n.k === k;
+        const isPick = pick === c;
+        return `<div class="chip ${reach ? 'ok' : 'bad'}${isPick ? ' pick' : ''}" data-node="${c}">
+          <div class="c1 mono">${fmt(c)} 次${isCur ? ' 📍' : ''}${isPick ? ' ●' : ''}</div>
+          <div class="c2">需持有 ${fmt(hold)} · 净耗 ${fmt(E0.netSpend(c) - E0.netSpend(s0))}<br>
+            ${s0 ? '净增' : '累计'} ${fmt(so)} ${A0.exchange} · 奖励 ${rd.souls[k]}</div></div>`;
+      }).join('');
+      /* 本轮右侧：点选次数 / 反推货币 的预估充值礼包推荐 */
+      let rh = '';
+      if (pick && rd.counts.indexOf(pick) >= 0) {
+        rh += recLine({ mode: 'blades', targetCount: pick, baseStock: inc.totalStock, baseCurrency: inc.totalCurrency, startCount: s0, used: usedPacks() }, '预估充值');
+      }
+      if (nodeNeed && rd.counts.indexOf(nodeNeed) >= 0) {
+        rh += recLine({ mode: 'currency', targetCurrency: rv, baseStock: inc.totalStock, baseCurrency: inc.totalCurrency, startCount: s0, used: usedPacks() }, '还需充值');
+      }
+      return `<div class="roundBlock"><h5>${rd.name}${rh ? `<span style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${rh}</span>` : ''}</h5>
+        <div class="chips">${chips}</div></div>`;
+    }).join('');
+    bindRec($('roundTable'));
+    $('roundTable').querySelectorAll('[data-node]').forEach(el => el.onclick = () => {
+      const c = +el.dataset.node;
+      S.pickNode[actKey()] = (S.pickNode[actKey()] === c) ? 0 : c;
+      save(); renderRoundTable();
+    });
+  }
+
+  /* ---------------- 宝库兑换规划（+/−，余额核对，不足标红） ---------------- */
+  function bumpTreasure(l, i, delta) {
+    const it = A().treasure[l][i], k = l + '-' + i, cur = S.treasure[actKey()][k] || 0;
+    if (delta > 0 && cur >= it[2]) { toast(`${it[0]} 已达限购上限 ${it[2]} 次`, 'warn'); return; }
+    if (delta > 0) {
+      const ol = openLayers();
+      if (!ol.open[l]) {
+        toast(`第 ${l + 1} 层需先在前 ${l} 层点够 ${fmt(LAYER_NEED[l])} ${A().exchange}（当前 ${fmt(ol.before[l])}）`, 'warn');
+        return;
+      }
+    }
+    S.treasure[actKey()][k] = Math.max(0, Math.min(it[2], cur + delta));
+    save(); renderAll();
+  }
+  function renderTreasure() {
+    const A0 = A(), E0 = E(), inc = income(), sel = S.treasure[actKey()];
+    const res = pathReach(inc.totalStock, inc.totalCurrency, startOf());
+    const avail = res.currency;
+
+    const sc = selectionCost();
+    const ol = openLayers();
+    const layerCost = ol.cost, beforeCost = ol.before;
+    let totalCost = 0, totalBack = 0, totalQty = 0;
+    A0.treasure.forEach((items, l) => items.forEach((it, i) => {
+      const q = Math.max(0, Math.min(it[2], sel[l + '-' + i] || 0));
+      totalCost += it[1] * q; totalQty += q;
+    }));
+    sc.list.forEach(p => { totalBack += p.ret * p.q; });     /* 返还只算已解锁、已点选的 */
+    const short = totalCost - avail;
+
+    /* 逐项标记：该层是否已解锁 / 未解锁但仍有残留选择（买不了、也不计返还）/ 是否超余额 */
+    let running = 0;
+    const flags = {};
+    A0.treasure.forEach((items, l) => items.forEach((it, i) => {
+      const k = l + '-' + i, q = Math.max(0, Math.min(it[2], sel[k] || 0));
+      if (q > 0 && ol.open[l]) {
+        flags[k] = { open: true, locked: false, short: running + it[1] * q > avail };
+        running += it[1] * q;
+      } else {
+        flags[k] = { open: ol.open[l], locked: !ol.open[l] && q > 0, short: false };
+      }
+    }));
+
+    let head = `<div class="row">
+      <span class="pill ${short > 0 ? 'bad' : 'ok'}">可用 ${A0.exchange} ${fmt(avail)}</span>
+      <span class="pill ${short > 0 ? 'bad' : ''}">已选消耗 ${fmt(totalCost)}</span>
+      <span class="pill ${short > 0 ? 'bad' : 'ghost'}">剩余 ${fmt(avail - totalCost)}</span>
+      <span class="pill blue">返还 ${A0.consumable} +${fmt(totalBack)}</span>
+      <span class="pill ghost">共 ${totalQty} 次兑换</span>
+    </div>`;
+    if (short > 0) {
+      head += `<div class="note" style="color:var(--bad)">超出可用 <b>${fmt(short)}</b> ${A0.exchange}</div>`;
+    }
+    if (sc.locked.length) {
+      head += `<div class="note" style="color:var(--bad)">有 ${sc.locked.length} 项还没解锁，不计入返还</div>`;
+    }
+    $('treasureHead').innerHTML = head;
+    const tsub = $('tresSub');
+    if (tsub) tsub.textContent = `可用 ${fmt(avail)} ${A0.exchange}${totalQty ? ' · 已选 ' + totalQty + ' 次' : ''}${short > 0 ? ' · 缺 ' + fmt(short) : ''}`;
+
+    $('treasureTable').innerHTML = A0.treasure.map((items, l) => {
+      const cards = items.map((it, i) => {
+        const k = l + '-' + i, q = Math.max(0, Math.min(it[2], sel[k] || 0));
+        const f = flags[k];
+        const cls = f.locked ? 'danger' : (!f.open ? 'locked' : (f.short ? 'danger' : ''));
+        return `<div class="card mini ${cls}"${f.open ? '' : ` data-lock="${l}"`}>
+          <h4><span>${it[0]}</span>${q ? `<span class="pill ${f.locked ? 'bad' : 'blue'}">${q}</span>` : ''}</h4>
+          <div class="meta">${fmt(it[1])}／次</div>
+          <div class="qty sm">
+            <button data-tdec="${k}" ${q <= 0 ? 'disabled' : ''}>−</button>
+            <span class="num">${q}</span>
+            <button data-tinc="${k}" ${(q >= it[2] || !f.open) ? 'disabled' : ''}>＋</button>
+          </div>
+        </div>`;
+      }).join('');
+      let lh = '';
+      if (!ol.open[l]) {
+        const gap2 = Math.max(0, LAYER_NEED[l] - beforeCost[l]);
+        lh = `<span class="pill ghost" style="margin-left:auto">还差 ${fmt(gap2)} ${A0.exchange}解锁</span>`;
+      } else if (layerCost[l] > 0) {
+        let cum = 0;
+        for (let L = 0; L <= l; L++) cum += layerCost[L];      /* 累计到本层的已选成本 = 要花的精魄 */
+        if (avail >= cum) {
+          lh = `<span class="pill ok" style="margin-left:auto">现有资源已够</span>`;
+        } else {
+          const rl = recLine({ mode: 'currency', targetCurrency: cum, baseStock: inc.totalStock, baseCurrency: inc.totalCurrency, startCount: startOf(), used: usedPacks() }, '还需充值');
+          lh = rl
+            ? `<span style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${rl}</span>`
+            : `<span class="pill bad" style="margin-left:auto">全买也不够</span>`;
+        }
+      }
+      return `<div class="roundBlock"><h5>第 ${l + 1} 层${lh}</h5>
+        <div class="gridTres">${cards}</div></div>`;
+    }).join('');
+
+    $('treasureTable').querySelectorAll('[data-lock]').forEach(c => c.onclick = () => {
+      const l = +c.dataset.lock;
+      toast(`第 ${l + 1} 层需先在前 ${l} 层点够 ${fmt(LAYER_NEED[l])} ${A().exchange}（当前 ${fmt(beforeCost[l])}）`, 'warn');
+    });
+    $('treasureTable').querySelectorAll('[data-tinc]').forEach(b => b.onclick = () => {
+      const p = b.dataset.tinc.split('-'); bumpTreasure(+p[0], +p[1], 1);
+    });
+    $('treasureTable').querySelectorAll('[data-tdec]').forEach(b => b.onclick = () => {
+      const p = b.dataset.tdec.split('-'); bumpTreasure(+p[0], +p[1], -1);
+    });
+    bindRec($('treasureTable'));
+
+  }
+
+  /* 顶部常驻摘要条：两个按钮（资源栏 / 顶部）；充值金额有变化时用蓝色提示 */
+  function renderSticky() {
+    const sb = $('stickyBar');
+    if (!sb) return;
+    const A0 = A(), E0 = E(), inc = income(), tc = targetCount();
+    const res = pathReach(inc.totalStock, inc.totalCurrency, startOf());
+    const need = (tc && tc <= E0.MAXT) ? neededStockPath(tc, inc.totalCurrency, startOf()) : null;
+    const gap = (tc && need != null) ? Math.max(0, need - inc.totalStock) : null;
+    sb.innerHTML = `<span>可达</span><b>${fmt(res.count)} 次</b>
+      ${tc ? `<span class="pill ${res.count >= tc ? 'ok' : 'warn'}">${res.count >= tc ? '已达成' : (gap == null ? '超出上限' : '差 ' + fmt(gap) + ' 个')}</span>`
+           : `<span class="pill ghost">未选目标</span>`}
+      <span class="pill ${inc.money > 0 ? 'blue' : 'ghost'}">充值 ${fmt(inc.money)} 元</span>
+      <button class="btn" id="stickyTop" style="margin-left:auto;padding:5px 10px;font-size:12.5px">顶部</button>
+      <button class="btn" id="stickyRes" style="padding:5px 10px;font-size:12.5px">资源栏</button>`;
+    const b = $('stickyRes'), t = $('stickyTop');
+    if (b) b.onclick = () => { const el = $('secRes'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    if (t) t.onclick = () => { if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  }
+
+  function renderAll() {
+    _recMap = {};
+    renderHeader(); renderCycle(); renderRes(); renderRec(); renderAnalysis();
+    renderPacks(); renderRoundTable(); renderTreasure(); renderRecharge(); renderSticky();
+  }
+
+  /* ---------------- 事件 ---------------- */
+  $('cycleMode').onchange = () => {
+    S.cycleMode = $('cycleMode').value;
+    if (S.cycleMode === 'manual') {
+      if (!S.anchorAct || !ACTS[S.anchorAct]) S.anchorAct = actKey();
+      if (!S.anchorDate) S.anchorDate = fmtD(today);
+    }
+    save(); renderAll();
+  };
+  $('serverStart').onchange = () => { S.serverStart = $('serverStart').value; save(); renderAll(); };
+  $('anchorAct').onchange = () => { S.anchorAct = $('anchorAct').value; save(); renderAll(); };
+  $('anchorDate').onchange = () => { S.anchorDate = $('anchorDate').value; save(); renderAll(); };
+  $('stock').oninput = () => {
+    const v = String($('stock').value).trim();
+    S.stock[actKey()] = v === '' ? null : Math.max(0, Math.floor(+v || 0));
+    save(); renderPacks(); renderAnalysis(); renderRec(); renderRoundTable(); renderTreasure(); renderRecharge(); renderSticky();
+  };
+  $('exchStock').oninput = () => {
+    const v = String($('exchStock').value).trim();
+    S.exchStock[actKey()] = v === '' ? null : Math.min(2000000000, Math.max(0, Math.floor(+v || 0)));
+    save(); renderPacks(); renderAnalysis(); renderRec(); renderRoundTable(); renderTreasure(); renderRecharge(); renderSticky();
+  };
+  $('startCount').oninput = () => {
+    const v = String($('startCount').value).trim();
+    S.start[actKey()] = v === '' ? null : Math.max(0, Math.floor(+v || 0));   /* 留空＝从 0 开始 */
+    save(); renderAll();
+  };
+  $('targetSwitch').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const m = b.dataset.m, t = S.target[actKey()];
+    t.mode = m;
+    if (m === 'round' && !(t.round >= 1)) t.round = 1;     // 默认落到"第一轮"，避免下拉显示第一轮却不计算
+    if (m === 'count' && !(t.count >= 1)) t.count = 100;   // 给个可改的默认次数，点完立刻有反馈
+    save(); renderRes(); renderPacks(); renderRec(); renderAnalysis(); renderRecharge(); renderSticky();
+  });
+  $('targetRound').onchange = () => { S.target[actKey()].round = +$('targetRound').value; save(); renderRes(); renderPacks(); renderRec(); renderAnalysis(); renderRecharge(); renderSticky(); };
+  $('targetCount').oninput = () => {
+    const v = String($('targetCount').value).trim();
+    S.target[actKey()].count = v === '' ? 0 : Math.max(0, Math.floor(+v || 0));
+    save(); renderPacks(); renderRec(); renderAnalysis(); renderRecharge(); renderSticky();
+  };
+  /* 次数框被清空并离开时，回退成"不设目标"，不留一个"看着选了其实没算"的假状态 */
+  $('targetCount').onchange = () => {
+    const t = S.target[actKey()];
+    if (t.mode === 'count' && !(t.count >= 1)) {
+      t.mode = ''; save(); renderRes(); renderPacks(); renderRec(); renderAnalysis(); renderRecharge(); renderSticky();
+    }
+  };
+  $('reverseExch').oninput = () => { S.reverse[actKey()] = Math.max(0, Math.floor(+$('reverseExch').value || 0)); save(); renderRoundTable(); };
+  document.querySelectorAll('[data-clear]').forEach(b => b.onclick = () => {
+    const k = b.dataset.clear;
+    if (k === 'stock') { S.stock[actKey()] = null; $('stock').value = ''; }
+    else if (k === 'exchStock') { S.exchStock[actKey()] = null; $('exchStock').value = ''; }
+    else if (k === 'startCount') { S.start[actKey()] = null; $('startCount').value = ''; }
+    else if (k === 'reverseExch') { S.reverse[actKey()] = 0; $('reverseExch').value = ''; }
+    save(); renderAll();
+  });
+  $('btnReset').onclick = () => {
+    S = blank();
+    ORDER.forEach(k => { S.stock[k] = null; S.exchStock[k] = null; S.start[k] = null; S.target[k] = { mode: '', round: 0, count: 0 };
+                         S.packs[k] = {}; S.treasure[k] = {}; S.reverse[k] = 0; });
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    save(); renderAll();
+    toast('已重置');
+  };
+
+  renderAll();
+  window.__renderAll = renderAll;
+})();
+</script>
+</body>
+</html>
