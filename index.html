@@ -374,7 +374,7 @@
 <section class="panel sec" id="secRecharge">
   <h2>充值汇总</h2>
   <div id="rechargeBox"></div>
-  <div class="note" style="margin-top:12px; line-height:1.9">理性充值，适度娱乐。游戏道具有贬值性，合理评估经济状况再充值。<br>本计算器不保证百分百准确，逐步购买避免浪费。</div>
+  <div class="note" style="margin-top:12px; line-height:1.9">理性充值，适度娱乐。游戏道具会贬值，合理评估再充值。<br>本计算器不保证百分百准确，逐步购买避免浪费。</div>
 </section>
 
 <div class="row" style="margin-top:16px; padding:0 2px">
@@ -1136,7 +1136,7 @@ if (typeof module !== 'undefined') module.exports = CALC;
     setVal($('startCount'), S.start[actKey()] == null ? '' : S.start[actKey()]);
     $('targetRound').innerHTML = A0.rounds.map((r, i) =>
       `<option value="${i + 1}">${r.name}（跑满 ${r.counts[5]} 次）</option>`).join('');
-    setVal($('targetRound'), t.round >= 1 ? t.round : 1);
+    $('targetRound').value = t.round >= 1 ? t.round : 1;   /* select 直接赋值，勿用 setVal（聚焦检查会拒绝写回） */
     setVal($('targetCount'), t.count || '');
     $('targetSwitch').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === (t.mode || '')));
     $('targetRound').style.display = t.mode === 'round' ? '' : 'none';
